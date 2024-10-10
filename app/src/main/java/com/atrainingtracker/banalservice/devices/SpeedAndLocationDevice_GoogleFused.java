@@ -1,52 +1,44 @@
-/*
- * aTrainingTracker (ANT+ BTLE)
- * Copyright (C) 2011 - 2019 Rainer Blind <rainer.blind@gmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see https://www.gnu.org/licenses/gpl-3.0
- */
-
 package com.atrainingtracker.banalservice.devices;
 
 import android.content.Context;
 import android.location.Location;
 import android.os.Bundle;
+import android.os.Looper;
 import android.util.Log;
+import androidx.core.app.ActivityCompat;
+import android.content.pm.PackageManager;
 
 import com.atrainingtracker.banalservice.BANALService;
 import com.atrainingtracker.banalservice.sensor.MySensorManager;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 
 public class SpeedAndLocationDevice_GoogleFused extends SpeedAndLocationDevice
         implements GoogleApiClient.ConnectionCallbacks,
-        GoogleApiClient.OnConnectionFailedListener,
-        LocationListener {
+        GoogleApiClient.OnConnectionFailedListener {
+
     private static final String TAG = "SpeedAndLocationDevice_GoogleFused";
     private static final boolean DEBUG = BANALService.DEBUG & false;
 
-    protected GoogleApiClient mGoogleApiClient;
-
-    protected LocationRequest mLocationRequest;
+    private GoogleApiClient mGoogleApiClient;
+    private LocationRequest mLocationRequest;
+    private FusedLocationProviderClient fusedLocationClient;
+    private LocationCallback locationCallback;
+    private Context context;
 
     public SpeedAndLocationDevice_GoogleFused(Context context, MySensorManager mySensorManager) {
         super(context, mySensorManager, DeviceType.SPEED_AND_LOCATION_GOOGLE_FUSED);
+        this.context = context;
         if (DEBUG) {
             Log.d(TAG, "constructor");
         }
+
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
 
         mGoogleApiClient = new GoogleApiClient.Builder(context)
                 .addApi(LocationServices.API)
@@ -58,49 +50,66 @@ public class SpeedAndLocationDevice_GoogleFused extends SpeedAndLocationDevice
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mLocationRequest.setInterval(SAMPLING_TIME);
 
-        // Connect the client.
+        // Initialize location callback to handle location updates
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult != null) {
+                    for (Location location : locationResult.getLocations()) {
+                        if (DEBUG) Log.d(TAG, "onLocationChanged");
+                        onNewLocation(location);
+                    }
+                }
+            }
+        };
+
+        // Connect the client
         mGoogleApiClient.connect();
     }
 
     @Override
     public String getName() {
-        return "google_fused";   // here, we do not use R.string to be compatible with the old (pre 3.8) way
+        return "google_fused"; // Maintain compatibility with pre 3.8 way
     }
-
 
     @Override
     public void onConnected(Bundle dataBundle) {
         if (DEBUG) Log.d(TAG, "onConnected()");
 
-        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
-    }
+        // Check for location permissions before requesting updates
+        if (ActivityCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Location permissions are not granted.");
+            // Request necessary permissions from the user or handle accordingly
+            return;
+        }
 
+        // Request location updates using the modern FusedLocationProviderClient
+        fusedLocationClient.requestLocationUpdates(mLocationRequest, locationCallback, Looper.getMainLooper());
+    }
 
     @Override
     public void onConnectionSuspended(int i) {
-        Log.i(TAG, "GoogleApiClient connection has been suspend");
-
+        Log.i(TAG, "GoogleApiClient connection has been suspended.");
         LocationUnavailable();
     }
 
     @Override
     public void onConnectionFailed(ConnectionResult connectionResult) {
-        Log.i(TAG, "GoogleApiClient connection has failed");
+        Log.e(TAG, "GoogleApiClient connection has failed: " + connectionResult.getErrorMessage());
+        // Optional: Implement retry logic or notify the user that location services are unavailable
     }
-
-
-    @Override
-    public void onLocationChanged(Location location) {
-        if (DEBUG) Log.d(TAG, "onLocationChanged");
-        onNewLocation(location);
-    }
-
 
     @Override
     public void shutDown() {
-        mGoogleApiClient.disconnect();
+        if (fusedLocationClient != null) {
+            fusedLocationClient.removeLocationUpdates(locationCallback);
+        }
+
+        if (mGoogleApiClient.isConnected()) {
+            mGoogleApiClient.disconnect();
+        }
 
         super.shutDown();
     }
-
 }

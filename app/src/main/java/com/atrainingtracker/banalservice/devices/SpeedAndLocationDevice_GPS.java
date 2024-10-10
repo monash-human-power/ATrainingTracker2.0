@@ -41,7 +41,7 @@ public class SpeedAndLocationDevice_GPS extends SpeedAndLocationDevice
     private Context context;
 
 
-    LocationManager mLocationManager;
+    private LocationManager mLocationManager;
 
     public SpeedAndLocationDevice_GPS(Context context, MySensorManager mySensorManager) {
         super(context, mySensorManager, DeviceType.SPEED_AND_LOCATION_GPS);
@@ -51,15 +51,10 @@ public class SpeedAndLocationDevice_GPS extends SpeedAndLocationDevice
         }
 
         mLocationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
-        // Permissions are granted, request location updates
-        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Location permissions are not granted.");
+            // Handle permission not granted, potentially request permissions
             return;
         }
         mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, SAMPLING_TIME, MIN_DISTANCE, this);
@@ -72,8 +67,12 @@ public class SpeedAndLocationDevice_GPS extends SpeedAndLocationDevice
 
     @Override
     public void shutDown() {
+        if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Location permissions are not granted.");
+            return;
+        }
         mLocationManager.removeUpdates(this);
-
         super.shutDown();
     }
 
@@ -87,7 +86,9 @@ public class SpeedAndLocationDevice_GPS extends SpeedAndLocationDevice
         if (DEBUG) Log.d(TAG, "onProviderEnabled: " + provider);
         if (provider.equals(LocationManager.GPS_PROVIDER)) {
             if (DEBUG) Log.d(TAG, "GPS location provider enabled");
-            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                    && ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "Location permissions are not granted.");
                 return;
             }
             mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, SAMPLING_TIME, MIN_DISTANCE, this);
@@ -98,6 +99,11 @@ public class SpeedAndLocationDevice_GPS extends SpeedAndLocationDevice
     public void onProviderDisabled(String provider) {
         if (provider.equals(LocationManager.GPS_PROVIDER)) {
             if (DEBUG) Log.d(TAG, "GPS location provider disabled");
+            if (ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                    && ActivityCompat.checkSelfPermission(mContext, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Log.e(TAG, "Location permissions are not granted.");
+                return;
+            }
             mLocationManager.removeUpdates(this);
             LocationUnavailable();
         }

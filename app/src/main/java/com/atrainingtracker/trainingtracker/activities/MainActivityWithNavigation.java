@@ -950,8 +950,8 @@ public class MainActivityWithNavigation
             public void run() {
                 try {
                     // Initialize and connect MQTT handler
-                    mqttHandler = new MqttHandler();
-                    mqttHandler.connect(BROKER_URL, CLIENT_ID);
+                    mqttHandler = new MqttHandler(BROKER_URL, CLIENT_ID);
+                    mqttHandler.connect();
                     Log.d("MQTT CONNECT", "MQTT handler has been created and connected");
                     // Publish a message after connection is established
                     publishMessage("house/bulb", "testMessage2");
