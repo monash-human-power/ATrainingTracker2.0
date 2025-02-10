@@ -937,6 +937,7 @@ public class MainActivityWithNavigation
     public void chooseStart() {
         TrainingApplication.setResumeFromCrash(false);
 
+        // Update UI to show that a new workout has started
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             @Override
             public void run() {
@@ -946,34 +947,50 @@ public class MainActivityWithNavigation
                 }
             }
         });
-        // Start background task for MQTT connection and message publishing
-        new Thread(new Runnable() {
+
+        // ✅ Ensure MQTT is initialized before using it
+        if (mqttHandler == null) {
+            mqttHandler = new MqttHandler(BROKER_URL, CLIENT_ID);
+            mqttHandler.connect();
+        }
+
+        // ✅ Publish MQTT message when workout starts
+        mqttHandler.publish("workout/status", "Workout started!");
+
+        // ✅ Send periodic updates (every 10 seconds)
+        new Handler().postDelayed(new Runnable() {
             @Override
             public void run() {
-                try {
-                    // Initialize and connect MQTT handler
-                    mqttHandler = new MqttHandler(BROKER_URL, CLIENT_ID);
-                    mqttHandler.connect();
-                    Log.d("MQTT CONNECT", "MQTT handler has been created and connected");
-                    // Publish a message after connection is established
-                    publishMessage("house/bulb", "testMessage2");
-                } catch (Exception e) {
-                    // Log any exceptions that occur during MQTT operations
-                    Log.e("MQTT ERROR", "Error in MQTT operations", e);
-                }
+                mqttHandler.publish("workout/status", "Still working out...");
             }
-        }).start();
+        }, 10000);
+
+        Log.d("MQTT", "Workout started - MQTT message sent.");
     }
 
     @Override
     public void chooseResume() {
         TrainingApplication.setResumeFromCrash(true);
 
+        // Update UI to show workout is resumed
         TextView tv = findViewById(R.id.tvStart);
         if (tv != null) {
             tv.setText(R.string.resume_workout);
         }
-        subscribeToTopic("testTopic");
+
+        // ✅ Ensure MQTT is initialized before using it
+        if (mqttHandler == null) {
+            mqttHandler = new MqttHandler(BROKER_URL, CLIENT_ID);
+            mqttHandler.connect();
+        }
+
+        // ✅ Publish MQTT message when resuming workout
+        mqttHandler.publish("workout/status", "Workout resumed!");
+
+        // ✅ Subscribe to real-time workout tracking topic (if applicable)
+        mqttHandler.subscribe("tracking/location");
+
+        Log.d("MQTT", "Workout resumed - MQTT message sent.");
     }
 
     private void publishMessage(String topic, String message){
