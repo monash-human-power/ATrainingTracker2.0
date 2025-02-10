@@ -140,7 +140,7 @@ public class MainActivityWithNavigation
         StartAndTrackingFragmentTabbedContainer.UpdateActivityTypeInterface,
         StarredSegmentsListFragment.StartSegmentDetailsActivityInterface,
         StartOrResumeInterface {
-    private static final String BROKER_URL = "tcp://192.168.0.229:1883";
+    private static final String BROKER_URL = "tcp://10.0.0.114:1883";
     private MqttHandler mqttHandler;
     private static final String CLIENT_ID = "client_id";
     public static final String SELECTED_FRAGMENT_ID = "SELECTED_FRAGMENT_ID";
@@ -235,7 +235,10 @@ public class MainActivityWithNavigation
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.main_activity_with_navigation);
+
         if (DEBUG) Log.d(TAG, "onCreate");
 
         // some initialization
@@ -246,13 +249,10 @@ public class MainActivityWithNavigation
         mStartTrackingFilter.addAction(TrainingApplication.REQUEST_RESUME_FROM_PAUSED);
 
         // now, create the UI
-        setContentView(R.layout.main_activity_with_navigation);
-
         Toolbar toolbar = findViewById(R.id.apps_toolbar);
         setSupportActionBar(toolbar);
 
         final ActionBar supportAB = getSupportActionBar();
-        // supportAB.setHomeAsUpIndicator(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
         supportAB.setDisplayHomeAsUpEnabled(true);
 
         mDrawerLayout = findViewById(R.id.drawer_layout);
@@ -261,7 +261,7 @@ public class MainActivityWithNavigation
         actionBarDrawerToggle.syncState();
 
         mNavigationView = findViewById(R.id.nav_view);
-        mNavigationView.setItemIconTintList(null);  // avoid converting the icons to black and white or gray and white
+        mNavigationView.setItemIconTintList(null);
         mNavigationView.setNavigationItemSelectedListener(this);
 
         if (!BANALService.isProtocolSupported(this, Protocol.BLUETOOTH_LE)) {
@@ -282,15 +282,11 @@ public class MainActivityWithNavigation
         if (!TrainingApplication.havePermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE);
         }
-        // if (!TrainingApplication.havePermission(Manifest.permission.READ_PHONE_STATE)) {
-        //     ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_PHONE_STATE}, MY_PERMISSIONS_REQUEST_READ_PHONE_STATE);
-        // }
 
         // check ANT+ installation
         if (TrainingApplication.checkANTInstallation() && BANALService.isANTProperlyInstalled(this)) {
             showInstallANTShitDialog();
         }
-
 
         if (savedInstanceState != null) {
             mSelectedFragmentId = savedInstanceState.getInt(SELECTED_FRAGMENT_ID, DEFAULT_SELECTED_FRAGMENT_ID);
@@ -307,13 +303,10 @@ public class MainActivityWithNavigation
                         break;
                 }
             }
-            // now, create and show the main fragment
             onNavigationItemSelected(mNavigationView.getMenu().findItem(mSelectedFragmentId));
         }
 
-
         if (TrainingApplication.trackLocation()) {
-            // check whether GPS is enabled
             LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
             if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 showGPSDisabledAlertToUser();
@@ -325,18 +318,27 @@ public class MainActivityWithNavigation
         int resultCode = googleApiAvailability.isGooglePlayServicesAvailable(this);
 
         if (resultCode != ConnectionResult.SUCCESS) {
-            // There is a problem with Google Play Services
             Dialog dialog = googleApiAvailability.getErrorDialog(this, resultCode, REQUEST_INSTALL_GOOGLE_PLAY_SERVICE);
-
-            if (dialog != null) {
-                // Show the dialog only if the user should see it, based on your custom logic
-                if (TrainingApplication.showInstallPlayServicesDialog()) {
-                    dialog.show();
-                }
+            if (dialog != null && TrainingApplication.showInstallPlayServicesDialog()) {
+                dialog.show();
             }
         }
 
+        // ✅ MQTT Changes (Minimal Fixes)
+        // Initialize and connect MQTT handler AFTER UI setup
+        mqttHandler = new MqttHandler(BROKER_URL, CLIENT_ID);
+        mqttHandler.connect();  // Establish connection to MQTT broker
+
+        // Delay message publishing to ensure MQTT is connected
+        Handler handler = new Handler();
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mqttHandler.publish("test/topic", "The app has started successfully!");
+            }
+        }, 2000);
     }
+
 
     @Override
     protected void onResume() {
