@@ -23,11 +23,11 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
+import android.util.Log;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.DialogFragment;
-import android.util.Log;
-import android.widget.Toast;
 
 import com.atrainingtracker.R;
 import com.atrainingtracker.trainingtracker.TrainingApplication;
@@ -48,24 +48,27 @@ public class StartOrResumeDialog extends DialogFragment {
         super.onAttach(context);
         // Verify that the host activity implements the callback interface
         try {
-            // Instantiate the NoticeDialogListener so we can send events to the host
+            // Instantiate the StartOrResumeInterface so we can send events to the host
             if (context instanceof StartOrResumeInterface) {
                 mStartOrResumeInterface = (StartOrResumeInterface) context;
             } else {
                 throw new ClassCastException(context.toString() + " must implement StartOrResumeInterface");
             }
         } catch (ClassCastException e) {
-            // The activity doesn't implement the interface, throw exception
+            // Handle the exception if the context does not implement the required interface
             throw new ClassCastException(context.toString() + " must implement StartOrResumeInterface");
         }
     }
 
+
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
-
         AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(getContext());
+
+        // Set the message for the dialog
         alertDialogBuilder.setMessage(R.string.start_or_resume_dialog_message);
-        // alertDialogBuilder.setCancelable(false);
+
+        // Set up the positive button and its click listener
         alertDialogBuilder.setPositiveButton(R.string.start_new_workout, new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int id) {
                 try {
@@ -84,6 +87,7 @@ public class StartOrResumeDialog extends DialogFragment {
             }
         });
 
+        // Set up the negative button and its click listener
         alertDialogBuilder.setNegativeButton(R.string.resume_workout, new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int id) {
                 try {
@@ -99,12 +103,13 @@ public class StartOrResumeDialog extends DialogFragment {
                 } finally {
                     dialog.cancel(); // Ensure dialog is canceled
                 }
-
             }
         });
 
+        // Create and return the dialog
         AlertDialog dialog = alertDialogBuilder.create();
         // Optionally, you can add more dialog configurations here
+
         return dialog;
     }
 }
