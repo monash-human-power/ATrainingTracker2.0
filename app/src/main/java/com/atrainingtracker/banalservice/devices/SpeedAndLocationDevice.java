@@ -32,7 +32,7 @@ import com.atrainingtracker.banalservice.sensor.SensorType;
 
 public abstract class SpeedAndLocationDevice extends MyDevice {
     public static final double ACCURACY_THRESHOLD = 200;
-    protected static final int SAMPLING_TIME = 1000;
+    protected static final int SAMPLING_TIME = 400;
     protected static final int MIN_DISTANCE = 0;
     private static final String TAG = "GPSSpeedAndLocationDevice";
     private static final boolean DEBUG = BANALService.DEBUG & false;
@@ -134,7 +134,7 @@ public abstract class SpeedAndLocationDevice extends MyDevice {
                 mLineDistanceSensor.newValue(location.distanceTo(mStartLocation) + 0.0);
 
                 double speed = location.getSpeed();
-                mSpeed = (mSpeed + speed) / 2;
+                mSpeed = speed;
                 mSpeedSensor.newValue(mSpeed);
                 mPaceSensor.newValue(1 / mSpeed);
 
