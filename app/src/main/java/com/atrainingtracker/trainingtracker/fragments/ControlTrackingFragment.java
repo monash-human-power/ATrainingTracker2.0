@@ -53,6 +53,7 @@ import com.atrainingtracker.trainingtracker.interfaces.StartOrResumeInterface;
 
 public class ControlTrackingFragment extends BaseTrackingFragment {
     public static final String TAG = ControlTrackingFragment.class.getName();
+    private BroadcastReceiver mRaceDetailsReceiver;
     private static final boolean DEBUG = TrainingApplication.DEBUG & false;
     private final IntentFilter mStartTrackingFilter = new IntentFilter();
     protected RemoteDevicesSettingsInterface mRemoteDevicesSettingsInterface;
@@ -165,7 +166,6 @@ public class ControlTrackingFragment extends BaseTrackingFragment {
         // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.control_tracking_layout, container, false);
 
-
         // add the fragments for showing the tracking mode as well as the fragment to change the sport type
 
         FragmentManager fragmentManager = getFragmentManager();
@@ -198,12 +198,23 @@ public class ControlTrackingFragment extends BaseTrackingFragment {
 
         mStartButton = view.findViewById(R.id.imageButtonStart);
         mStartButton.setOnClickListener(new View.OnClickListener() {
+            @Override
             public void onClick(View v) {
-                if (DEBUG) Log.i(TAG, "start button clicked");
-                // mControlTrackingListener.startTracking();
-                getContext().sendBroadcast(new Intent(TrainingApplication.REQUEST_START_TRACKING));
+                // show race dialog always, user can skip if they want
+                try {
+                    StartRaceDialogFragment f = StartRaceDialogFragment.newInstance();
+                    if (getFragmentManager() != null && !f.isAdded()) {
+                        f.show(getFragmentManager(), StartRaceDialogFragment.TAG);
+                    }
+                } catch (Exception e) {
+                    // fallback: if something goes wrong, start tracking immediately
+                    if (getContext() != null) {
+                        getContext().sendBroadcast(new Intent(TrainingApplication.REQUEST_START_TRACKING));
+                    }
+                }
             }
         });
+
 
         mPauseButton = view.findViewById(R.id.imageButtonPause);
         mPauseButton.setOnClickListener(new View.OnClickListener() {
@@ -272,8 +283,6 @@ public class ControlTrackingFragment extends BaseTrackingFragment {
                         } else {
                             mRemoteDevicesSettingsInterface.enableBluetoothRequest();
                             // Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                            // // enableBtIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            // // getContext().startActivity(enableBtIntent);
                             // getActivity().startActivityForResult(enableBtIntent, ENABLE_BLUETOOTH_INTENT); TODO: do this via the mainActivity
                         }
                     }
@@ -292,11 +301,40 @@ public class ControlTrackingFragment extends BaseTrackingFragment {
             mStartOrResumeInterface.showStartOrResumeDialog();
         }
 
+        // Existing receivers
         getActivity().registerReceiver(mUpdateResearchReceiver, mUpdateResearchFilter);
         getActivity().registerReceiver(mStartTrackingReceiver, mStartTrackingFilter);
         getActivity().registerReceiver(mPauseTrackingReceiver, new IntentFilter(TrainingApplication.REQUEST_PAUSE_TRACKING));
         getActivity().registerReceiver(mStopTrackingReceiver, new IntentFilter(TrainingApplication.REQUEST_STOP_TRACKING));
+
+        // 🔹 New receiver for race details
+        mRaceDetailsReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (TrainingApplication.ACTION_RACE_DETAILS.equals(intent.getAction())) {
+                    int durationMin = intent.getIntExtra(TrainingApplication.EXTRA_RACE_DURATION_MIN, 0);
+                    int numRiders = intent.getIntExtra(TrainingApplication.EXTRA_NUM_RIDERS, 1);
+                    String[] riderNames = intent.getStringArrayExtra(TrainingApplication.EXTRA_RIDER_NAMES);
+                    int[] fitnessScores = intent.getIntArrayExtra(TrainingApplication.EXTRA_RIDER_FITNESS);
+                    boolean skip = intent.getBooleanExtra(TrainingApplication.EXTRA_SKIP_DIALOG, false);
+
+                    if (DEBUG) {
+                        Log.d(TAG, "Race Duration: " + durationMin);
+                        Log.d(TAG, "Riders: " + numRiders + " Skip? " + skip);
+                        if (riderNames != null) {
+                            for (int i = 0; i < riderNames.length; i++) {
+                                Log.d(TAG, "Rider " + riderNames[i] + " Fitness: " + fitnessScores[i]);
+                            }
+                        }
+                    }
+
+                    // TODO: hook this into your AI panel logic
+                }
+            }
+        };
+        getActivity().registerReceiver(mRaceDetailsReceiver, new IntentFilter(TrainingApplication.ACTION_RACE_DETAILS));
     }
+
 
     @Override
     public void onStart () {
@@ -336,6 +374,10 @@ public class ControlTrackingFragment extends BaseTrackingFragment {
     public void onDestroyView () {
         super.onDestroyView();
         if (DEBUG) Log.i(TAG, "onDestroyView");
+        if (mRaceDetailsReceiver != null) {
+            requireContext().unregisterReceiver(mRaceDetailsReceiver);
+            mRaceDetailsReceiver = null;
+        }
 
         getActivity().unregisterReceiver(mStartTrackingReceiver);
         getActivity().unregisterReceiver(mPauseTrackingReceiver);

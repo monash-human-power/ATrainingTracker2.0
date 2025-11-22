@@ -7,7 +7,7 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 public class MqttHandler implements MqttCallback {
 
-    private MqttClient client;
+    private static MqttClient client;
     private String brokerUrl;
     private String clientId;
 
@@ -85,6 +85,19 @@ public class MqttHandler implements MqttCallback {
 
         } catch (MqttException e) {
             e.printStackTrace();
+        }
+    }
+
+    public static void shutdownAll() {
+        try {
+            if (client != null && client.isConnected()) {
+                client.disconnectForcibly();
+                client.close();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            client = null;
         }
     }
 }

@@ -41,6 +41,7 @@ import android.widget.Toast;
 import com.atrainingtracker.R;
 import com.atrainingtracker.banalservice.BANALService;
 import com.atrainingtracker.banalservice.BSportType;
+import com.atrainingtracker.banalservice.coach.CoachEngine;
 import com.atrainingtracker.banalservice.sensor.SensorData;
 import com.atrainingtracker.banalservice.sensor.formater.DistanceFormatter;
 import com.atrainingtracker.banalservice.sensor.formater.TimeFormatter;
@@ -49,6 +50,7 @@ import com.atrainingtracker.banalservice.database.SportTypeDatabaseManager;
 import com.atrainingtracker.trainingtracker.activities.MainActivityWithNavigation;
 import com.atrainingtracker.trainingtracker.activities.WorkoutDetailsActivity;
 import com.atrainingtracker.trainingtracker.exporter.FileFormat;
+import com.atrainingtracker.trainingtracker.fragments.AISuggestionPanelFragment;
 import com.atrainingtracker.trainingtracker.tracker.TrackerService;
 import com.atrainingtracker.trainingtracker.database.KnownLocationsDatabaseManager;
 import com.atrainingtracker.trainingtracker.database.LapsDatabaseManager;
@@ -146,6 +148,15 @@ public class TrainingApplication extends Application {
     public static final String SENSOR_NAMES = "sensorNames";
     public static final String GC_SENSORS = "GCSensors";
 
+    // --- Race setup / dialog constants ---
+    public static final String ACTION_RACE_DETAILS = "com.atrainingtracker.trainingapplication.ACTION_RACE_DETAILS";
+    public static final String EXTRA_RACE_DURATION_MIN = "com.atrainingtracker.trainingapplication.EXTRA_RACE_DURATION_MIN";
+    public static final String EXTRA_NUM_RIDERS = "com.atrainingtracker.trainingapplication.EXTRA_NUM_RIDERS";
+    public static final String EXTRA_RIDER_NAMES = "com.atrainingtracker.trainingapplication.EXTRA_RIDER_NAMES";
+    public static final String EXTRA_RIDER_FITNESS = "com.atrainingtracker.trainingapplication.EXTRA_RIDER_FITNESS";
+    public static final String EXTRA_SKIP_DIALOG = "com.atrainingtracker.trainingapplication.EXTRA_SKIP_DIALOG";
+
+
     protected static final String NOTIFICATION_CHANNEL__TRACKING = "NOTIFICATION_CHANNEL__TRACKING";
     protected static final String NOTIFICATION_CHANNEL__TRACKING_2 = "NOTIFICATION_CHANNEL__TRACKING_2";
     public static final String NOTIFICATION_CHANNEL__EXPORT = "NOTIFICATION_CHANNEL__EXPORT";
@@ -231,6 +242,16 @@ public class TrainingApplication extends Application {
     private PendingIntent mStartMainActivityPendingIntent;
     private String mNotificationSummary = "searching";
     private DistanceFormatter mDistanceFormatter = new DistanceFormatter();
+
+    private AISuggestionPanelFragment aiSuggestionPanelFragment;
+
+    public AISuggestionPanelFragment getAiSuggestionPanelFragment() {
+        return aiSuggestionPanelFragment;
+    }
+
+    public void setAiSuggestionPanelFragment(AISuggestionPanelFragment aiSuggestionPanelFragment) {
+        this.aiSuggestionPanelFragment = aiSuggestionPanelFragment;
+    }
 
     // protected void showNotification()
     // {

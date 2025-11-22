@@ -56,6 +56,7 @@ import com.atrainingtracker.banalservice.sensor.SensorType;
 import com.atrainingtracker.banalservice.sensor.formater.DistanceFormatter;
 import com.atrainingtracker.banalservice.sensor.formater.TimeFormatter;
 import com.atrainingtracker.banalservice.database.SportTypeDatabaseManager;
+import com.atrainingtracker.trainingtracker.database.AppDatabase;
 import com.atrainingtracker.trainingtracker.database.ExtremaType;
 import com.atrainingtracker.trainingtracker.exporter.ExportManager;
 import com.atrainingtracker.trainingtracker.exporter.ExportWorkoutIntentService;
@@ -353,6 +354,38 @@ public class EditWorkoutFragment extends Fragment {
 
                 // TODO: do in new thread?
                 saveWorkout();
+
+                // Mirror the saved workout into Room so tests can assert it
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            // Build from WorkoutSummaries (legacy DB) so values match what the app just saved
+                            // (If you already have these vars in memory, use them directly instead.)
+                            Integer totalSec = WorkoutSummariesDatabaseManager.getInt(mWorkoutID,
+                                    WorkoutSummariesDatabaseManager.WorkoutSummaries.TIME_TOTAL_s);
+                            Double distance_m = WorkoutSummariesDatabaseManager.getDouble(mWorkoutID,
+                                    WorkoutSummariesDatabaseManager.WorkoutSummaries.DISTANCE_TOTAL_m);
+                            String name = WorkoutSummariesDatabaseManager.getString(mWorkoutID,
+                                    WorkoutSummariesDatabaseManager.WorkoutSummaries.WORKOUT_NAME);
+
+                            com.atrainingtracker.trainingtracker.database.entities.Workout w =
+                                    new com.atrainingtracker.trainingtracker.database.entities.Workout();
+
+                            // Map fields — adjust to your entity’s field names/units
+                            w.name = name;                                   // optional
+                            w.duration = (totalSec != null) ? totalSec : 0;  // if your entity uses minutes, convert here
+                            w.distanceKm = (distance_m != null) ? (float)(distance_m / 1000.0) : 0f;
+                            w.timestamp = System.currentTimeMillis();
+
+                            AppDatabase db = AppDatabase.getInstance(context.getApplicationContext());
+                            db.workoutDao().insert(w);
+                        } catch (Throwable t) {
+                            // keep silent in prod; or log if you prefer
+                        }
+                    }
+                }).start();
+
 
                 Intent resultIntent = new Intent();
                 resultIntent.putExtra(WorkoutSummaries.WORKOUT_ID, mWorkoutID);

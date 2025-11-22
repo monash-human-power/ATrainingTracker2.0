@@ -223,6 +223,14 @@ public class TrackingFragment extends BaseTrackingFragment {
             getChildFragmentManager().beginTransaction().add(mMapContainer.getId(), mTrackOnMapTrackingFragment).commit();
         }
 
+        AISuggestionPanelFragment aiSuggestionPanelFragment = new AISuggestionPanelFragment();
+        FrameLayout aiPanelContainer = view.findViewById(R.id.ai_panel_container);
+        getChildFragmentManager().beginTransaction()
+                .replace(R.id.ai_panel_container, aiSuggestionPanelFragment)
+                .commit();
+
+        ((TrainingApplication) requireActivity().getApplication()).setAiSuggestionPanelFragment(aiSuggestionPanelFragment);
+
         return view;
     }
 

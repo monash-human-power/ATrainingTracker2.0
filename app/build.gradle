@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'io.fabric'
+apply plugin: 'com.google.gms.google-services'
 
 def getGitHash = { ->
     def stdout = new ByteArrayOutputStream()
@@ -11,7 +12,6 @@ def getGitHash = { ->
 }
 
 android {
-    // Travis update separately
     compileSdkVersion 29
     buildToolsVersion '29.0.2'
 
@@ -22,25 +22,22 @@ android {
         multiDexEnabled true
         versionName "4.2.2"
         versionCode 212
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunnerArguments IS_TESTING: 'true'
     }
 
     signingConfigs {
-        //noinspection GroovyMissingReturnStatement
         release {
-            // storeFile file('/home/rainer/Dropbox/workspace/keystore')
-            // keyAlias "aTrainingTrackerReleaseKey"
+            // configure release signing if needed
         }
     }
 
     buildTypes {
         debug {
-            // Separate the debug build
             applicationIdSuffix ".debug"
             versionNameSuffix "-${getGitHash()}"
         }
         release {
-            applicationIdSuffix ""
-
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
             signingConfig signingConfigs.release
@@ -50,15 +47,10 @@ android {
     }
 
     lintOptions {
-        //Configure checks with paths
-        //lintConfig file("lint.xml")
         baseline file("lint-baseline.xml")
         checkReleaseBuilds true
-        // TODO Some dependencies conflicts with Android included
         disable 'DuplicatePlatformClasses'
-
         showAll true
-        //debug issues in Travis
         textReport true
         textOutput 'stdout'
     }
@@ -71,15 +63,27 @@ android {
         pickFirst 'META-INF/LICENSE'
     }
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
+    }
+
     useLibrary 'org.apache.http.legacy'
 
     dexOptions {
         javaMaxHeapSize "8g"
         preDexLibraries = false
     }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/java'
+        test.java.srcDirs += 'src/test/java'
+    }
 }
 
 dependencies {
+    // Apache / commons
     implementation group: 'commons-codec', name: 'commons-codec', version: '1.6'
     implementation group: 'commons-io', name: 'commons-io', version: '2.4'
     implementation group: 'commons-logging', name: 'commons-logging', version: '1.1.3'
@@ -94,35 +98,90 @@ dependencies {
     implementation 'com.getpebble:pebblekit:3.0.0'
     implementation files('../ANT-Android-SDKs/ANT+_Android_SDK/API/antpluginlib_3-5-0.jar')
 
+    // AndroidX / Material
     implementation 'androidx.preference:preference:1.1.0'
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'androidx.recyclerview:recyclerview:1.0.0'
     implementation 'com.google.android.material:material:1.1.0-beta01'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.0.0'
+
+    // Google services
     implementation 'com.google.android.gms:play-services-maps:17.0.0'
     implementation 'com.google.android.gms:play-services-location:17.0.0'
-    // compile 'com.google.android.gms:play-services-auth:10.0.1'
-
-    // compile('com.crashlytics.sdk.android:crashlytics:2.9.1@aar') {
-    //   transitive = true
-    // }
     implementation 'com.google.firebase:firebase-core:17.2.0'
 
+    // Dropbox / networking
     implementation 'com.dropbox.core:dropbox-core-sdk:3.1.1'
-
     implementation 'com.squareup.okhttp3:okhttp:3.10.0'
     implementation 'com.squareup.picasso:picasso:2.5.2'
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.0.0'
+
+    // MQTT
     implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.1.0'
     implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
-
     implementation('org.eclipse.paho:org.eclipse.paho.android.service:1.0.2') {
         exclude module: 'support-v4'
     }
+    implementation 'androidx.test.espresso:espresso-idling-resource:3.3.0'
 
+
+    testImplementation 'org.robolectric:robolectric:4.11.1'
+    // Unit testing
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "androidx.test:core:1.5.0"
+    testImplementation "org.robolectric:robolectric:4.11"
+    testImplementation "org.mockito:mockito-core:5.5.0"
+    testImplementation "org.mockito.kotlin:mockito-kotlin:5.1.0"
+    testImplementation "io.mockk:mockk:1.13.5"
+    testImplementation "org.assertj:assertj-core:3.24.2"
+    testImplementation "org.hamcrest:hamcrest:2.2"
+
+    implementation "androidx.room:room-runtime:2.4.3"
+    annotationProcessor "androidx.room:room-compiler:2.4.3"
+    androidTestImplementation "androidx.room:room-testing:2.4.3"
+
+    // ✅ enable desugaring for Java 8 code paths
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.1.5'
+
+    // --- Android Instrumented Testing (UI + Espresso) ---
+    androidTestImplementation 'androidx.test:core:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-idling-resource:3.3.0'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.2'
+    androidTestImplementation 'androidx.test:runner:1.3.0'
+    androidTestImplementation 'androidx.test:rules:1.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-intents:3.3.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-contrib:3.3.0'
+
+// --- Room DB Testing (if you’re testing database operations) ---
+    androidTestImplementation "androidx.room:room-testing:2.2.5"
+
+    // AndroidX / test force
+    configurations.all {
+        resolutionStrategy {
+            force "androidx.test:monitor:1.6.0"
+        }
+    }
+
+    // Force Android-compatible BouncyCastle
+    implementation "org.bouncycastle:bcprov-jdk15to18:1.70"
+    testImplementation "org.bouncycastle:bcprov-jdk15to18:1.70"
+    testImplementation project(':app')
+    androidTestImplementation project(':app')
+
+    configurations.all {
+        resolutionStrategy {
+            force "org.bouncycastle:bcprov-jdk15to18:1.70"
+            eachDependency { details ->
+                if (details.requested.group == "org.bouncycastle" &&
+                        details.requested.name.startsWith("bcprov-jdk18on")) {
+                    details.useTarget("org.bouncycastle:bcprov-jdk15to18:1.70")
+                }
+            }
+        }
+    }
 }
 
-apply plugin: 'com.google.gms.google-services'
-
+// Optional release properties
 def props = new Properties()
 if (rootProject.file("release.properties").exists()) {
     props.load(new FileInputStream(rootProject.file("release.properties")))

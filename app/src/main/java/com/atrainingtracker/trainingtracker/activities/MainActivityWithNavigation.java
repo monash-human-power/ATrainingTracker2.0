@@ -116,6 +116,8 @@ import com.atrainingtracker.trainingtracker.segments.StarredSegmentsTabbedContai
 import com.dropbox.core.android.Auth;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
+import com.atrainingtracker.trainingtracker.AppIdlingResource;
+
 
 import java.util.LinkedList;
 import java.util.List;
@@ -140,7 +142,7 @@ public class MainActivityWithNavigation
         StartAndTrackingFragmentTabbedContainer.UpdateActivityTypeInterface,
         StarredSegmentsListFragment.StartSegmentDetailsActivityInterface,
         StartOrResumeInterface {
-    private static final String BROKER_URL = "tcp://10.0.0.114:1883";
+    private static final String BROKER_URL = "tcp://10.0.2.2:1883";
     private MqttHandler mqttHandler;
     private static final String CLIENT_ID = "client_id";
     public static final String SELECTED_FRAGMENT_ID = "SELECTED_FRAGMENT_ID";
@@ -161,7 +163,7 @@ public class MainActivityWithNavigation
     protected int mSelectedFragmentId = DEFAULT_SELECTED_FRAGMENT_ID;
     // the views
     protected DrawerLayout mDrawerLayout;
-    protected NavigationView mNavigationView;
+    public NavigationView mNavigationView;
     protected MenuItem mPreviousMenuItem;
     protected Fragment mFragment;
     protected Handler mHandler;  // necessary to wait some time before we disconnect from the BANALService when the app is paused.
@@ -234,31 +236,36 @@ public class MainActivityWithNavigation
     };
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-
+    protected void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_activity_with_navigation);
 
         if (DEBUG) Log.d(TAG, "onCreate");
 
-        // some initialization
+        // Tell Espresso tests that the app is still loading
+        AppIdlingResource.increment();
+
+        // --- Basic setup ---
         mTrainingApplication = (TrainingApplication) getApplication();
         mHandler = new Handler();
 
         mStartTrackingFilter = new IntentFilter(TrainingApplication.REQUEST_START_TRACKING);
         mStartTrackingFilter.addAction(TrainingApplication.REQUEST_RESUME_FROM_PAUSED);
 
-        // now, create the UI
+        // --- Toolbar and Drawer ---
         Toolbar toolbar = findViewById(R.id.apps_toolbar);
         setSupportActionBar(toolbar);
 
-        final ActionBar supportAB = getSupportActionBar();
-        supportAB.setDisplayHomeAsUpEnabled(true);
+        ActionBar supportAB = getSupportActionBar();
+        if (supportAB != null) {
+            supportAB.setDisplayHomeAsUpEnabled(true);
+        }
 
         mDrawerLayout = findViewById(R.id.drawer_layout);
-
-        ActionBarDrawerToggle actionBarDrawerToggle = new ActionBarDrawerToggle(this, mDrawerLayout, toolbar, R.string.TrainingTracker, R.string.TrainingTracker);
-        actionBarDrawerToggle.syncState();
+        ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
+                this, mDrawerLayout, toolbar,
+                R.string.TrainingTracker, R.string.TrainingTracker);
+        toggle.syncState();
 
         mNavigationView = findViewById(R.id.nav_view);
         mNavigationView.setItemIconTintList(null);
@@ -270,26 +277,112 @@ public class MainActivityWithNavigation
             menuItem.setCheckable(false);
         }
 
-        // getPermissions
+        // --- Do slow work in a background thread so the UI stays smooth ---
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    checkAndRequestPermissions();
+                    performAntAndGpsChecks();
+                    checkGooglePlayServices();
+                    setupMqtt();
+
+                    // Back to main thread for UI setup
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            restoreOrLoadFragment(savedInstanceState);
+
+                            // Now the app is ready — tell Espresso tests to continue
+                            AppIdlingResource.decrement();
+                        }
+                    });
+
+                } catch (final Exception e) {
+                    Log.e(TAG, "Startup error", e);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            AppIdlingResource.decrement();
+                        }
+                    });
+                }
+            }
+        }).start();
+    }
+
+
+    /* ---------------------- Helper Methods ---------------------- */
+
+    // Ask for required permissions
+    private void checkAndRequestPermissions() {
         if (!TrainingApplication.havePermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 && !TrainingApplication.havePermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.WRITE_EXTERNAL_STORAGE},
                     MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION_AND_WRITE_EXTERNAL_STORAGE);
         }
         if (!TrainingApplication.havePermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
         if (!TrainingApplication.havePermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE);
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE);
         }
+    }
 
-        // check ANT+ installation
-        if (TrainingApplication.checkANTInstallation() && BANALService.isANTProperlyInstalled(this)) {
+    // Check ANT+ and GPS requirements
+    private void performAntAndGpsChecks() {
+        if (TrainingApplication.checkANTInstallation()
+                && BANALService.isANTProperlyInstalled(this)) {
             showInstallANTShitDialog();
         }
 
+        if (TrainingApplication.trackLocation()) {
+            LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+            if (locationManager != null && !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                showGPSDisabledAlertToUser();
+            }
+        }
+    }
+
+    // Check Google Play Services availability
+    private void checkGooglePlayServices() {
+        GoogleApiAvailability googleApiAvailability = GoogleApiAvailability.getInstance();
+        int resultCode = googleApiAvailability.isGooglePlayServicesAvailable(this);
+        if (resultCode != ConnectionResult.SUCCESS) {
+            Dialog dialog = googleApiAvailability.getErrorDialog(
+                    this, resultCode, REQUEST_INSTALL_GOOGLE_PLAY_SERVICE);
+            if (dialog != null && TrainingApplication.showInstallPlayServicesDialog()) {
+                dialog.show();
+            }
+        }
+    }
+
+    // Setup MQTT connection and send a simple message
+    private void setupMqtt() {
+        mqttHandler = new MqttHandler(BROKER_URL, CLIENT_ID);
+        mqttHandler.connect();
+
+        // Delay message publishing to ensure MQTT is connected
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                mqttHandler.publish("test/topic", "The app has started successfully!");
+            }
+        }, 2000);
+    }
+
+
+    // Restore previous fragment or show default one
+    private void restoreOrLoadFragment(Bundle savedInstanceState) {
         if (savedInstanceState != null) {
-            mSelectedFragmentId = savedInstanceState.getInt(SELECTED_FRAGMENT_ID, DEFAULT_SELECTED_FRAGMENT_ID);
+            mSelectedFragmentId = savedInstanceState.getInt(
+                    SELECTED_FRAGMENT_ID, DEFAULT_SELECTED_FRAGMENT_ID);
             mFragment = getSupportFragmentManager().getFragment(savedInstanceState, "mFragment");
         } else {
             if (getIntent().hasExtra(SELECTED_FRAGMENT)) {
@@ -297,7 +390,6 @@ public class MainActivityWithNavigation
                     case START_OR_TRACKING:
                         mSelectedFragmentId = R.id.drawer_start_tracking;
                         break;
-
                     case WORKOUT_LIST:
                         mSelectedFragmentId = R.id.drawer_workouts;
                         break;
@@ -305,39 +397,8 @@ public class MainActivityWithNavigation
             }
             onNavigationItemSelected(mNavigationView.getMenu().findItem(mSelectedFragmentId));
         }
-
-        if (TrainingApplication.trackLocation()) {
-            LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-            if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                showGPSDisabledAlertToUser();
-            }
-        }
-
-        // Check whether Google Play Services are available
-        GoogleApiAvailability googleApiAvailability = GoogleApiAvailability.getInstance();
-        int resultCode = googleApiAvailability.isGooglePlayServicesAvailable(this);
-
-        if (resultCode != ConnectionResult.SUCCESS) {
-            Dialog dialog = googleApiAvailability.getErrorDialog(this, resultCode, REQUEST_INSTALL_GOOGLE_PLAY_SERVICE);
-            if (dialog != null && TrainingApplication.showInstallPlayServicesDialog()) {
-                dialog.show();
-            }
-        }
-
-        // ✅ MQTT Changes (Minimal Fixes)
-        // Initialize and connect MQTT handler AFTER UI setup
-        mqttHandler = new MqttHandler(BROKER_URL, CLIENT_ID);
-        mqttHandler.connect();  // Establish connection to MQTT broker
-
-        // Delay message publishing to ensure MQTT is connected
-        Handler handler = new Handler();
-        handler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                mqttHandler.publish("test/topic", "The app has started successfully!");
-            }
-        }, 2000);
     }
+
 
 
     @Override
