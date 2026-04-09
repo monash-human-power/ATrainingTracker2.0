@@ -90,6 +90,8 @@ public class BANALService
     public static final String PREV_LAP_DISTANCE_STRING = "com.atrainingtracker.banalservice.PREV_LAP_DISTANCE_STRING";
     public static final String PREV_LAP_SPEED_mps = "com.atrainingtracker.banalservice.PREV_LAP_SPEED_mps";
     public static final String PREV_LAP_SPEED_STRING = "com.atrainingtracker.banalservice.PREV_LAP_SPEED_STRING";
+    /** Wall-clock time when the user pressed Lap (ms since epoch); stored with the lap row. */
+    public static final String PREV_LAP_END_EPOCH_MS = "com.atrainingtracker.banalservice.PREV_LAP_END_EPOCH_MS";
 
     public static final String NEW_TIME_EVENT_INTENT = "com.atrainingtracker.banalservice.NEW_TIME_EVENT_INTENT";
     // public static final String START_TIMER_INTENT    = "de.rainerblind.banalservice.START_TIMER_INTENT";
@@ -350,21 +352,31 @@ public class BANALService
             lapDistance_String = sensorData.getStringValue();
         }
 
-        double lapSpeed = lapDistance / lapTime_s;
-        String lapSpeedString = SensorType.SPEED_mps.getMyFormatter().format(lapSpeed);
+        // Average speed for the lap segment; avoid divide-by-zero on the first lap press (lap time can still be 0).
+        double lapSpeedMps = averageSpeedMps(lapDistance, lapTime_s);
+        String lapSpeedString = SensorType.SPEED_mps.getMyFormatter().format(lapSpeedMps);
 
         cDeviceManager.newLap();
 
-        // send broadcast with these values
+        long lapEndEpochMs = System.currentTimeMillis();
         Intent intent = new Intent(BANALService.LAP_SUMMARY);
         intent.putExtra(BANALService.PREV_LAP_NR, prevLapNr);
         intent.putExtra(PREV_LAP_TIME_S, lapTime_s);
         intent.putExtra(PREV_LAP_TIME_STRING, lapTime);
         intent.putExtra(PREV_LAP_DISTANCE_m, lapDistance);
         intent.putExtra(PREV_LAP_DISTANCE_STRING, lapDistance_String);
-        intent.putExtra(PREV_LAP_SPEED_mps, lapSpeed);
+        intent.putExtra(PREV_LAP_SPEED_mps, lapSpeedMps);
         intent.putExtra(PREV_LAP_SPEED_STRING, lapSpeedString);
+        intent.putExtra(PREV_LAP_END_EPOCH_MS, lapEndEpochMs);
         sendBroadcast(intent);
+    }
+
+    /** Lap-average speed (m/s); returns 0 when elapsed time is zero. */
+    public static double averageSpeedMps(double distanceMeters, int elapsedSeconds) {
+        if (elapsedSeconds <= 0) {
+            return 0.0;
+        }
+        return distanceMeters / elapsedSeconds;
     }
 
     protected SensorType[] getSensorTypes()  // TODO: also change to Set?

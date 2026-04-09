@@ -72,6 +72,7 @@ public class TrackingFragment extends BaseTrackingFragment {
     private static final int TEXT_SIZE_TITLE = 15;
     private final IntentFilter mNewTimeEventFilter = new IntentFilter(BANALService.NEW_TIME_EVENT_INTENT);
     private final IntentFilter mTrackingViewChangedFilter = new IntentFilter(TRACKING_VIEW_CHANGED_INTENT);
+    private final IntentFilter mLapSummaryFilter = new IntentFilter(BANALService.LAP_SUMMARY);
     protected Mode mMode = Mode.TRACKING;
 
     // protected static final String BEST = "BEST_1353485234512395476534439475247";
@@ -83,6 +84,7 @@ public class TrackingFragment extends BaseTrackingFragment {
     protected LinearLayout mLLSensors;
     protected FrameLayout mMapContainer;
     protected Button mButtonLap;
+    protected TextView mTvTrackingLapsSummary;
     protected long mViewId;
     protected ActivityType mActivityType;
     protected LayoutInflater mLayoutInflater;
@@ -99,6 +101,34 @@ public class TrackingFragment extends BaseTrackingFragment {
         @Override
         public void onReceive(Context context, Intent intent) {
             updateSensorFields();
+        }
+    };
+
+    /**
+     * Appends a line when a lap is stored so the athlete sees lap time/distance without leaving the tracking screen.
+     */
+    private final BroadcastReceiver mLapSummaryReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (mTvTrackingLapsSummary == null) {
+                return;
+            }
+            int lapNr = intent.getIntExtra(BANALService.PREV_LAP_NR, 0);
+            String time = intent.getStringExtra(BANALService.PREV_LAP_TIME_STRING);
+            String dist = intent.getStringExtra(BANALService.PREV_LAP_DISTANCE_STRING);
+            if (time == null) {
+                time = "?";
+            }
+            if (dist == null) {
+                dist = "?";
+            }
+            String line = getString(R.string.tracking_lap_line_format, lapNr, time, dist);
+            CharSequence cur = mTvTrackingLapsSummary.getText();
+            if (cur == null || cur.length() == 0) {
+                mTvTrackingLapsSummary.setText(line);
+            } else {
+                mTvTrackingLapsSummary.setText(cur + "\n" + line);
+            }
         }
     };
 
@@ -197,6 +227,10 @@ public class TrackingFragment extends BaseTrackingFragment {
         View view = inflater.inflate(R.layout.tracking_fragment, container, false);
 
         mButtonLap = view.findViewById(R.id.buttonLap);
+        mTvTrackingLapsSummary = view.findViewById(R.id.tvTrackingLapsSummary);
+        if (mTvTrackingLapsSummary != null) {
+            mTvTrackingLapsSummary.setText("");
+        }
 
         if (mButtonLap != null) {
             // Log.d(TAG, "setting onClickListener to Lap Button");
@@ -233,6 +267,7 @@ public class TrackingFragment extends BaseTrackingFragment {
 
         getActivity().registerReceiver(mNewTimeEventReceiver, mNewTimeEventFilter);
         getActivity().registerReceiver(mTrackingViewChangedReceiver, mTrackingViewChangedFilter);
+        getActivity().registerReceiver(mLapSummaryReceiver, mLapSummaryFilter);
     }
 
     @Override
@@ -289,6 +324,11 @@ public class TrackingFragment extends BaseTrackingFragment {
 
         getActivity().unregisterReceiver(mNewTimeEventReceiver);
         getActivity().unregisterReceiver(mTrackingViewChangedReceiver);
+        try {
+            getActivity().unregisterReceiver(mLapSummaryReceiver);
+        } catch (IllegalArgumentException e) {
+            // already unregistered
+        }
     }
 
     @Override
@@ -351,8 +391,14 @@ public class TrackingFragment extends BaseTrackingFragment {
 
         if (TrackingViewsDatabaseManager.showLapButton(mViewId)) {
             mButtonLap.setVisibility(View.VISIBLE);
+            if (mTvTrackingLapsSummary != null) {
+                mTvTrackingLapsSummary.setVisibility(View.VISIBLE);
+            }
         } else {
             mButtonLap.setVisibility(View.GONE);
+            if (mTvTrackingLapsSummary != null) {
+                mTvTrackingLapsSummary.setVisibility(View.GONE);
+            }
         }
 
         // finally, also fill with new values

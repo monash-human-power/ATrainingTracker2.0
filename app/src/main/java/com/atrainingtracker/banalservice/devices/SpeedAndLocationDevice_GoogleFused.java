@@ -49,6 +49,8 @@ public class SpeedAndLocationDevice_GoogleFused extends SpeedAndLocationDevice
         mLocationRequest = LocationRequest.create();
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mLocationRequest.setInterval(SAMPLING_TIME);
+        // Allow the fused provider to deliver fixes faster than setInterval() so speed = d/dt stays responsive.
+        mLocationRequest.setFastestInterval(Math.max(100, SAMPLING_TIME / 2));
 
         // Initialize location callback to handle location updates
         locationCallback = new LocationCallback() {

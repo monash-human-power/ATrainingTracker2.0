@@ -749,6 +749,28 @@
 
             </TableLayout>
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="2dp"
+                android:layout_marginTop="8dp"
+                android:background="?android:attr/listDivider" />
+
+            <TextView
+                android:id="@+id/tvLapsHeading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="8dp"
+                android:text="@string/workout_laps_heading"
+                android:textAppearance="?android:attr/textAppearanceMedium"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvLapsList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="8dp"
+                android:textIsSelectable="true"
+                android:typeface="monospace" />
 
         </LinearLayout>
 

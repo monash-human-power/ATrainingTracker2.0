@@ -103,10 +103,15 @@ public class TrackerService extends Service {
         public void onReceive(Context context, Intent intent) {
             if (DEBUG) Log.i(TAG, "received lap summary intent");
 
+            long lapEndMs = intent.getLongExtra(BANALService.PREV_LAP_END_EPOCH_MS, -1L);
+            if (lapEndMs < 0) {
+                lapEndMs = System.currentTimeMillis();
+            }
             saveLap(intent.getIntExtra(BANALService.PREV_LAP_NR, 0),
                     intent.getIntExtra(BANALService.PREV_LAP_TIME_S, 0),
                     intent.getDoubleExtra(BANALService.PREV_LAP_DISTANCE_m, 0),
-                    intent.getDoubleExtra(BANALService.PREV_LAP_SPEED_mps, 0));
+                    intent.getDoubleExtra(BANALService.PREV_LAP_SPEED_mps, 0),
+                    lapEndMs);
         }
     };
     private String mBaseFileName;
@@ -379,13 +384,13 @@ public class TrackerService extends Service {
                 lapDistance = (Double) sensorData.getValue();
             }
 
-            double lapSpeed = lapDistance / lapTime_s;
+            double lapSpeed = BANALService.averageSpeedMps(lapDistance, lapTime_s);
 
-            saveLap(prevLapNr, lapTime_s, lapDistance, lapSpeed);
+            saveLap(prevLapNr, lapTime_s, lapDistance, lapSpeed, System.currentTimeMillis());
         }
     }
 
-    protected void saveLap(long lapNr, int lapTime, double lapDistance, double averageSpeed) {
+    protected void saveLap(long lapNr, int lapTime, double lapDistance, double averageSpeed, long lapEndEpochMs) {
         if (DEBUG)
             Log.i(TAG, "saveLap: lapNr=" + lapNr + ", lapTime=" + lapTime + ", lapDistance=" + lapDistance + ", averageSpeed=" + averageSpeed);
 
@@ -397,6 +402,7 @@ public class TrackerService extends Service {
         values.put(LapsDatabaseManager.Laps.TIME_TOTAL_s, lapTime);
         values.put(LapsDatabaseManager.Laps.DISTANCE_TOTAL_m, lapDistance);
         values.put(LapsDatabaseManager.Laps.SPEED_AVERAGE_mps, averageSpeed);
+        values.put(LapsDatabaseManager.Laps.LAP_END_EPOCH_MS, lapEndEpochMs);
 
         SQLiteDatabase lapDb = LapsDatabaseManager.getInstance().getOpenDatabase();
         lapDb.insert(LapsDatabaseManager.Laps.TABLE, null, values);

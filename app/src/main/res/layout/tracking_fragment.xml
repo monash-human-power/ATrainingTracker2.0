@@ -57,6 +57,16 @@
                 android:text="@string/Lap"
                 android:textSize="30sp" />
         </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvTrackingLapsSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="8dp"
+            android:textSize="14sp"
+            android:visibility="gone" />
     </LinearLayout>
 
 </ScrollView>

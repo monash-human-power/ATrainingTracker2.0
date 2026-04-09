@@ -76,11 +76,13 @@ public class LapsDatabaseManager {
         public static final String TIME_TOTAL_s = "timeTotal_s";
         public static final String DISTANCE_TOTAL_m = "distanceTotal_m";
         public static final String SPEED_AVERAGE_mps = "speedAverage_mps";
+        /** When the user pressed Lap (System.currentTimeMillis()); 0 if unknown (legacy rows). */
+        public static final String LAP_END_EPOCH_MS = "lapEndEpochMs";
     }
 
     public static class LapsDbHelper extends SQLiteOpenHelper {
         public static final String DB_NAME = "Laps.db";
-        public static final int DB_VERSION = 1;
+        public static final int DB_VERSION = 2;
         protected static final String CREATE_TABLE = "create table " + Laps.TABLE + " ("
                 + Laps.C_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
                 + Laps.WORKOUT_ID + " int,"
@@ -88,7 +90,8 @@ public class LapsDatabaseManager {
                 + Laps.TIME_START + " DATETIME DEFAULT CURRENT_TIMESTAMP,"
                 + Laps.TIME_TOTAL_s + " int,"
                 + Laps.DISTANCE_TOTAL_m + " real,"
-                + Laps.SPEED_AVERAGE_mps + " real)";
+                + Laps.SPEED_AVERAGE_mps + " real,"
+                + Laps.LAP_END_EPOCH_MS + " INTEGER DEFAULT 0)";
         private static final String TAG = "LapsDbHelper";
         private static final boolean DEBUG = false;
 
@@ -109,12 +112,10 @@ public class LapsDatabaseManager {
         //Called whenever newVersion != oldVersion
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-            // TODO: alter table instead of deleting!
-
-            db.execSQL("drop table if exists " + Laps.TABLE);
-
-            if (DEBUG) Log.d(TAG, "onUpgraded");
-            onCreate(db);  // run onCreate to get new database
+            if (oldVersion < 2) {
+                db.execSQL("ALTER TABLE " + Laps.TABLE + " ADD COLUMN " + Laps.LAP_END_EPOCH_MS + " INTEGER DEFAULT 0");
+            }
+            if (DEBUG) Log.d(TAG, "onUpgraded from " + oldVersion + " to " + newVersion);
         }
     }
 

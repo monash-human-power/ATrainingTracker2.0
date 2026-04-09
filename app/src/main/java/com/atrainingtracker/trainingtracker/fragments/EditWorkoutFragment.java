@@ -62,15 +62,20 @@ import com.atrainingtracker.trainingtracker.exporter.ExportWorkoutIntentService;
 import com.atrainingtracker.trainingtracker.MyHelper;
 import com.atrainingtracker.trainingtracker.TrainingApplication;
 import com.atrainingtracker.trainingtracker.database.EquipmentDbHelper;
+import com.atrainingtracker.trainingtracker.database.LapsDatabaseManager;
 import com.atrainingtracker.trainingtracker.database.WorkoutSummariesDatabaseManager;
+import com.atrainingtracker.trainingtracker.tracker.TrackerService;
 import com.atrainingtracker.trainingtracker.database.WorkoutSummariesDatabaseManager.WorkoutSummaries;
 import com.atrainingtracker.trainingtracker.dialogs.EditFancyWorkoutNameDialog;
 import com.atrainingtracker.trainingtracker.helpers.CalcExtremaValuesTask;
 import com.atrainingtracker.trainingtracker.interfaces.ReallyDeleteDialogInterface;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class EditWorkoutFragment extends Fragment {
     public static final String TAG = "EditWorkoutFragment";
@@ -183,6 +188,8 @@ public class EditWorkoutFragment extends Fragment {
         }
     };
     CheckBox cbPrivate;
+    TextView tvLapsHeading;
+    TextView tvLapsList;
     boolean radioButtonAlreadyChecked = false;  // necessary to allow deselect of the radio buttons within the group for Commute and Trainer
     private double MAX_WORKOUT_TIME_TO_SHOW_DELETE_BUTTON = 10 * 60;  // 10 min
     private String ALL = "all";
@@ -258,6 +265,9 @@ public class EditWorkoutFragment extends Fragment {
         rbCommute = view.findViewById(R.id.rbCommute);
         rbTrainer = view.findViewById(R.id.rbTrainer);
         cbPrivate = view.findViewById(R.id.cbPrivate);
+
+        tvLapsHeading = view.findViewById(R.id.tvLapsHeading);
+        tvLapsList = view.findViewById(R.id.tvLapsList);
 
         return view;
     }
@@ -399,6 +409,8 @@ public class EditWorkoutFragment extends Fragment {
         } else {
             fillViewsFromSavedInstanceState(savedInstanceState);
         }
+
+        fillLapsList();
     }
 
     @Override
@@ -594,6 +606,60 @@ public class EditWorkoutFragment extends Fragment {
 
         cursor.close();
         databaseManager.closeDatabase(); // db.close();
+    }
+
+    /**
+     * Lists laps stored for this workout (see {@link TrackerService#saveLap} / {@link LapsDatabaseManager}).
+     */
+    private void fillLapsList() {
+        if (tvLapsList == null || tvLapsHeading == null) {
+            return;
+        }
+        SQLiteDatabase lapDb = LapsDatabaseManager.getInstance().getOpenDatabase();
+        Cursor c = null;
+        try {
+            c = lapDb.query(LapsDatabaseManager.Laps.TABLE,
+                    null,
+                    LapsDatabaseManager.Laps.WORKOUT_ID + "=?",
+                    new String[]{String.valueOf(mWorkoutID)},
+                    null,
+                    null,
+                    LapsDatabaseManager.Laps.LAP_NR + " ASC");
+            if (c.getCount() == 0) {
+                tvLapsHeading.setVisibility(View.GONE);
+                tvLapsList.setVisibility(View.GONE);
+                return;
+            }
+            tvLapsHeading.setVisibility(View.VISIBLE);
+            tvLapsList.setVisibility(View.VISIBLE);
+
+            int idxEpoch = c.getColumnIndex(LapsDatabaseManager.Laps.LAP_END_EPOCH_MS);
+            TimeFormatter tf = new TimeFormatter();
+            DistanceFormatter df = new DistanceFormatter();
+            SimpleDateFormat clock = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+            String unit = getString(MyHelper.getDistanceUnitNameId());
+            StringBuilder sb = new StringBuilder();
+            while (c.moveToNext()) {
+                int lapNr = c.getInt(c.getColumnIndexOrThrow(LapsDatabaseManager.Laps.LAP_NR));
+                int lapTimeS = c.getInt(c.getColumnIndexOrThrow(LapsDatabaseManager.Laps.TIME_TOTAL_s));
+                double lapDistM = c.getDouble(c.getColumnIndexOrThrow(LapsDatabaseManager.Laps.DISTANCE_TOTAL_m));
+                String distStr = getString(R.string.value_unit_string_string, df.format(lapDistM), unit);
+                String line = getString(R.string.tracking_lap_line_format, lapNr, tf.format(lapTimeS), distStr);
+                if (idxEpoch >= 0) {
+                    long ms = c.getLong(idxEpoch);
+                    if (ms > 0) {
+                        line = line + " · " + clock.format(new Date(ms));
+                    }
+                }
+                sb.append(line).append('\n');
+            }
+            tvLapsList.setText(sb.toString().trim());
+        } finally {
+            if (c != null) {
+                c.close();
+            }
+            LapsDatabaseManager.getInstance().closeDatabase();
+        }
     }
 
     protected void fillExtremaValuesFromDb(SQLiteDatabase db) {

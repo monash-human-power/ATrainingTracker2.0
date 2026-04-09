@@ -41,6 +41,8 @@
     <string name="StartPositionTitle">Start</string>
     <string name="EndPositionTitle">Stop</string>
     <string name="Lap">Lap</string>
+    <string name="workout_laps_heading">Laps</string>
+    <string name="tracking_lap_line_format">Lap %1$d · %2$s · %3$s</string>
     <string name="Equipment">Equipment</string>
     <string name="edit_device">edit device</string>
     <string name="edit_location">edit location</string>
