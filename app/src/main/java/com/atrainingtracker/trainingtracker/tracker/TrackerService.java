@@ -221,6 +221,11 @@ public class TrackerService extends Service {
 
         registerReceiver(mSearchingFinishedReceiver, mSearchingFinishedFilter);
         registerReceiver(mAltitudeCorrectionReceiver, mAltitudeCorrectionFilter);
+        // Avoid duplicate lap rows if onCreate ever runs again without a balanced unregister (stale receiver).
+        try {
+            unregisterReceiver(mLapSummaryReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
         registerReceiver(mLapSummaryReceiver, mLapSummaryFilter);
     }
 
@@ -394,20 +399,39 @@ public class TrackerService extends Service {
         if (DEBUG)
             Log.i(TAG, "saveLap: lapNr=" + lapNr + ", lapTime=" + lapTime + ", lapDistance=" + lapDistance + ", averageSpeed=" + averageSpeed);
 
-        // create and fill content values
-        ContentValues values = new ContentValues();
-        values.put(LapsDatabaseManager.Laps.WORKOUT_ID, mWorkoutID);
-        values.put(LapsDatabaseManager.Laps.LAP_NR, lapNr);
-        // values.put(Laps.TIME_START, done automatically);
-        values.put(LapsDatabaseManager.Laps.TIME_TOTAL_s, lapTime);
-        values.put(LapsDatabaseManager.Laps.DISTANCE_TOTAL_m, lapDistance);
-        values.put(LapsDatabaseManager.Laps.SPEED_AVERAGE_mps, averageSpeed);
-        values.put(LapsDatabaseManager.Laps.LAP_END_EPOCH_MS, lapEndEpochMs);
+        if (lapNr < BANALService.INIT_LAP_NR) {
+            if (DEBUG) Log.w(TAG, "saveLap: skip invalid lapNr=" + lapNr);
+            return;
+        }
 
         SQLiteDatabase lapDb = LapsDatabaseManager.getInstance().getOpenDatabase();
-        lapDb.insert(LapsDatabaseManager.Laps.TABLE, null, values);
-        LapsDatabaseManager.getInstance().closeDatabase(); // instead of lapDb.close();
+        try {
+            // One row per (workout, lap index). Duplicate LAP_SUMMARY or double-registered receivers
+            // must not create extra rows for the same lap button press.
+            Cursor dup = lapDb.query(LapsDatabaseManager.Laps.TABLE,
+                    new String[]{LapsDatabaseManager.Laps.C_ID},
+                    LapsDatabaseManager.Laps.WORKOUT_ID + "=? AND " + LapsDatabaseManager.Laps.LAP_NR + "=?",
+                    new String[]{String.valueOf(mWorkoutID), String.valueOf(lapNr)},
+                    null, null, null);
+            boolean alreadyHaveLap = dup.getCount() > 0;
+            dup.close();
+            if (alreadyHaveLap) {
+                if (DEBUG) Log.w(TAG, "saveLap: skip duplicate workout=" + mWorkoutID + " lapNr=" + lapNr);
+                return;
+            }
 
+            ContentValues values = new ContentValues();
+            values.put(LapsDatabaseManager.Laps.WORKOUT_ID, mWorkoutID);
+            values.put(LapsDatabaseManager.Laps.LAP_NR, lapNr);
+            values.put(LapsDatabaseManager.Laps.TIME_TOTAL_s, lapTime);
+            values.put(LapsDatabaseManager.Laps.DISTANCE_TOTAL_m, lapDistance);
+            values.put(LapsDatabaseManager.Laps.SPEED_AVERAGE_mps, averageSpeed);
+            values.put(LapsDatabaseManager.Laps.LAP_END_EPOCH_MS, lapEndEpochMs);
+
+            lapDb.insert(LapsDatabaseManager.Laps.TABLE, null, values);
+        } finally {
+            LapsDatabaseManager.getInstance().closeDatabase();
+        }
     }
 
     protected long getSportTypeId() {

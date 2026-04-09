@@ -26,6 +26,7 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.Log;
 
 import com.atrainingtracker.banalservice.devices.DeviceManager;
@@ -137,6 +138,12 @@ public class BANALService
     public static final String URI_ANT_USB_SERVICE = "com.dsi.ant.usbservice";
 
     public static final int INIT_LAP_NR = 1;
+    /**
+     * Ignore a second {@link #newLap()} within this window (ms). Duplicate {@code REQUEST_NEW_LAP}
+     * deliveries in one frame would otherwise advance the lap counter twice per button press.
+     */
+    private static final long NEW_LAP_DEBOUNCE_MS = 280;
+    private long mLastNewLapElapsedMs = 0L;
     private static DeviceManager cDeviceManager;
     private static MySensorManager cSensorManager;
     private static FilterManager cFilterManager;
@@ -322,6 +329,13 @@ public class BANALService
     protected void newLap() {
         if (DEBUG) Log.i(TAG, "newLap");
 
+        long now = SystemClock.elapsedRealtime();
+        if (mLastNewLapElapsedMs != 0L && (now - mLastNewLapElapsedMs) < NEW_LAP_DEBOUNCE_MS) {
+            if (DEBUG) Log.w(TAG, "newLap: ignored duplicate within " + (now - mLastNewLapElapsedMs) + " ms");
+            return;
+        }
+        mLastNewLapElapsedMs = now;
+
         // if (cPaused == true) { return; }
 
         if (TrainingApplication.startSearchWhenNewLap()) {
@@ -368,6 +382,8 @@ public class BANALService
         intent.putExtra(PREV_LAP_SPEED_mps, lapSpeedMps);
         intent.putExtra(PREV_LAP_SPEED_STRING, lapSpeedString);
         intent.putExtra(PREV_LAP_END_EPOCH_MS, lapEndEpochMs);
+        // Limit to this app so the same implicit broadcast is not delivered twice in odd multi-context cases.
+        intent.setPackage(getPackageName());
         sendBroadcast(intent);
     }
 
