@@ -78,5 +78,6 @@
     <color name="baby_blue">#89CFF0</color>
     <color name="baby_blue_eyes">#A1CAF1</color>
     <color name="little_boy_blue">#6CA0DC</color>
+    <color name="transparent_black">#80000000</color>
 
 </resources>
